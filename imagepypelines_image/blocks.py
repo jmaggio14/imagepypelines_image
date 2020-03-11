@@ -9,20 +9,25 @@ from .imports import import_opencv
 
 import numpy as np
 import imagepypelines as ip
-from collection import OrderDict
 cv2 = import_opencv()
 
-DEFAULT_CHANNEL_TYPE = "channels_first"
-"""default channel axis for all images, defaults to 'channels_first'"""
+DEFAULT_CHANNEL_TYPE = "channels_last"
+"""default channel axis for all images, defaults to 'channels_last'"""
 
 __all__ = [
+            'ChannelSplit',
+            'MergerFactory',
+            'RGBMerger',
+            'RGBAMerger',
+            'Merger3',
+            'Merger4',
+            'CastTo',
             'NormAB',
             'Norm01',
             'NormDtype',
             'DisplaySafe',
-            'CastTo',
-            'FFT2',
-            'IdealFreqFilter',
+            # 'ImageFFT',
+            # 'IdealFreqFilter',
             ]
 
 
@@ -84,15 +89,16 @@ class ChannelSplit(ImageBlock):
         """
         n_channels = image.shape[self.channel_axis]
         if self.channel_type == "channels_last":
-            channels = image[...,ch] for ch in range(n_channels)
+            channels = tuple(image[Ellipsis,ch] for ch in range(n_channels))
         else: # self.channel_type == channels_first
             # this line will have to be updated if batching is supported
-            channels = image[ch,...] for ch in range(n_channels)
+            channels = tuple(image[ch,Ellipsis] for ch in range(n_channels))
 
         return channels
 
 
 ################################################################################
+# Array Merging
 class BaseChannelMerger(ImageBlock):
     """combines independent channels into one Image"""
     def process(self, *images):
@@ -104,40 +110,37 @@ class BaseChannelMerger(ImageBlock):
         return np.stack(images, axis=self.channel_axis)
 
 
-################################################################################
-def get_merger(n_channels, channel_names=None):
-    """fetches a new channel merger object
+class MergerFactory(object):
+    def __new__(cls, n_channels, channel_names=None):
+        """fetches a new channel merger object
 
-    Args:
-        n_channels(int): number of channels
-        channel_names(tuple,list,None): Optional, the names of the channels to
-            be merged. If left as None, then undescriptive names will be
-            generated.
+        Args:
+            n_channels(int): number of channels
+            channel_names(tuple,list,None): Optional, the names of the channels to
+                be merged. If left as None, then undescriptive names will be
+                generated.
 
-    Returns:
-        :obj:`ChannelMerger`: new channel merger class for the given number of
-            channels
-    """
-    # check if channel names are the correct length
-    if channel_names:
-        if len(channel_names) != n_channels:
-            msg = "'channel_names' must be a tuple of length %s" % n_channels
-            raise RuntimeError(msg)
-        args = channel_names
-    else:
-        args = ["channel%s" % i for i in range(n_channels)]
-
-
-    cls_name = "ChannelMerge%s" % n_channels
-    channel_merger = type(cls_name, (BaseChannelMerger,), {'args':args})
-    return channel_merger
-
+        Returns:
+            :obj:`ChannelMerger`: new channel merger class for the given number of
+                channels
+        """
+        # check if channel names are the correct length
+        if channel_names:
+            if len(channel_names) != n_channels:
+                msg = "'channel_names' must be a tuple of length %s" % n_channels
+                raise RuntimeError(msg)
+            args = channel_names
+        else:
+            args = ["channel%s" % i for i in range(n_channels)]
+        cls_name = "ChannelMerge%s" % n_channels
+        channel_merger = type(cls_name, (BaseChannelMerger,), {'args':args})
+        return channel_merger
 
 # generate example Merger Classes
-RGBMerger = get_merger(3, ["Red", "Green", "Blue"])
-RGBAMerger = get_merger(3, ["Red", "Green", "Blue","Alpha"])
-Merger3 = get_merger(3)
-Merger4 = get_merger(4)
+RGBMerger = MergerFactory(3, ["Red", "Green", "Blue"])
+RGBAMerger = MergerFactory(4, ["Red", "Green", "Blue","Alpha"])
+Merger3 = MergerFactory(3)
+Merger4 = MergerFactory(4)
 
 
 ################################################################################
@@ -157,7 +160,7 @@ class CastTo(ip.Block):
 
         # instance variables
         self.cast_type = cast_type
-        super().__init__(batch_size="all")
+        super().__init__(batch_size="singles")
 
     ############################################################################
     def process(self, arr):
@@ -175,7 +178,7 @@ class CastTo(ip.Block):
 ################################################################################
 #                               Normalization
 ################################################################################
-class NormAB(ImageBlock):
+class NormAB(ip.Block):
     """normalizes to range [a,b] and then casts to given cast_type
 
     If a < b, then the histogram will just be scaled and shifted.
@@ -204,7 +207,7 @@ class NormAB(ImageBlock):
         # instance variables
         self.a = a
         self.b = b
-        self.cast_type
+        self.cast_type = cast_type
 
         super().__init__(batch_size="singles")
 
@@ -222,7 +225,7 @@ class NormAB(ImageBlock):
         arr = arr.astype(np.float64)
         arr = (arr - arr.min()) / (arr.max() - arr.min())
         arr = (arr * (self.b - self.a)) + self.a
-        return arr
+        return arr.astype(self.cast_type)
 
 
 ################################################################################
@@ -256,37 +259,37 @@ class DisplaySafe(NormAB):
 ################################################################################
 #                               Filtering
 ################################################################################
-class ImageFFT(ImageBlock):
-    """Performs an FFT on each Image channel independently"""
-    # NOTE:
-    #     Make another block with a batch_size = "all"
-    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
-        """instantiates the fft block
-
-        Args:
-            channel_type(str): channel_type, either "channels_first" or
-                "channels_last"
-        """
-        # call super
-        super().__init__(channel_type)
-
-        # update block tags
-        self.tags.add("filtering")
-
-    ############################################################################
-    def process(self, images):
-        """applies the fft to the axes specified by 'channel_type'
-
-        Args:
-            images(np.ndarray): N channel image
-        """
-        return np.fft.ftt2(image, axes=self.axes)
-
-
-################################################################################
-class IdealFreqFilter(ImageBlock):
-    """Calculates and applies an MTF to a given fft input. Does not perform an
-    fft interally, that must be done upstream.
-    """
-    def __init__(self):
-        pass
+# class ImageFFT(ImageBlock):
+#     """Performs an FFT on each Image channel independently"""
+#     # NOTE:
+#     #     Make another block with a batch_size = "all"
+#     def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
+#         """instantiates the fft block
+#
+#         Args:
+#             channel_type(str): channel_type, either "channels_first" or
+#                 "channels_last"
+#         """
+#         # call super
+#         super().__init__(channel_type)
+#
+#         # update block tags
+#         self.tags.add("filtering")
+#
+#     ############################################################################
+#     def process(self, images):
+#         """applies the fft to the axes specified by 'channel_type'
+#
+#         Args:
+#             images(np.ndarray): N channel image
+#         """
+#         return np.fft.ftt2(image, axes=self.axes)
+#
+#
+# ################################################################################
+# class IdealFreqFilter(ImageBlock):
+#     """Calculates and applies an MTF to a given fft input. Does not perform an
+#     fft interally, that must be done upstream.
+#     """
+#     def __init__(self):
+#         pass

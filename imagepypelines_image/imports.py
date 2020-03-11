@@ -6,7 +6,7 @@
 # Copyright (c) 2018-2020 Jeff Maggio, Nathan Dileas, Ryan Hartzell
 #
 import sys
-from .. import error as iperror
+from imagepypelines import error as iperror
 
 
 def import_tensorflow():
