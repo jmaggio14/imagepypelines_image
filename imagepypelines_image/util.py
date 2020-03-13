@@ -5,6 +5,7 @@ from imagepypelines import BlockError
 Helper functions that contain canned tests or checks that we will run
 frequently
 """
+################################################################################
 def interpolation_type_check(interp):
     """
     checks to see if the interpolation type is one of the acceptable
@@ -15,7 +16,7 @@ def interpolation_type_check(interp):
 
     return True
 
-
+################################################################################
 def dtype_type_check(dtype):
     """
     checks to see if the interpolation type is one of the acceptable
@@ -26,9 +27,16 @@ def dtype_type_check(dtype):
 
     return True
 
-
+################################################################################
 def channel_type_check(channel_type):
     """checks if the channel_type is one of ("channels_first","channels_last"),
     otherwise raises a BlockError"""
+    if channel_type not in ("channels_first","channels_last","no_channel"):
+        raise BlockError("invalid channel type, must be one of ('channels_first','channels_last','no_channel')")
+
+################################################################################
+def rgb_channel_type_check(channel_type):
+    """checks if the channel_type is one of ("channels_first","channels_last"),
+    otherwise raises a BlockError"""
     if channel_type not in ("channels_first","channels_last"):
-        raise BlockError("invalid channel type, must be one of ('channels_first','channels_last')")
+        raise BlockError("invalid *RGB* channel type, must be one of ('channels_first','channels_last')")
