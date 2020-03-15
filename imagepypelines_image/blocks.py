@@ -52,7 +52,7 @@ class ImageBlock(ip.Block):
 
         # NOTE: add default input types
 
-        super().__init__(batch_size="singles")
+        super().__init__(batch_size="each")
         self.tags.add("imagery")
 
     ############################################################################
@@ -79,6 +79,10 @@ class ImageBlock(ip.Block):
 #                               Util
 ################################################################################
 class ChannelSplit(ImageBlock):
+    def __init__(self, channel_type="channels_last"):
+        super().__init__(channel_type=channel_type)
+        self.enforce('image', np.ndarray, [(None,None,None)])
+
     # NOTE: ADD EXAMPLES
     """splits the image into it's component channels"""
     def process(self, image):
@@ -101,6 +105,12 @@ class ChannelSplit(ImageBlock):
 # Array Merging
 class BaseChannelMerger(ImageBlock):
     """combines independent channels into one Image"""
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs)
+
+        for arg in self.args:
+            self.enforce(arg, np.ndarray, [(None,None)])
+
     def process(self, *images):
         """merge multiple images into one image with multiple channels
 
@@ -160,7 +170,8 @@ class CastTo(ip.Block):
 
         # instance variables
         self.cast_type = cast_type
-        super().__init__(batch_size="singles")
+        super().__init__(batch_size="each")
+        self.enforce('arr', np.ndarray, [(None,None),(None,None,None)])
 
     ############################################################################
     def process(self, arr):
@@ -191,7 +202,7 @@ class NormAB(ip.Block):
             is float64
 
     Batch Size:
-        "singles"
+        "each"
     """
     def __init__(self, a, b, cast_type=np.float64):
         # INPUT CHECKING
@@ -209,7 +220,9 @@ class NormAB(ip.Block):
         self.b = b
         self.cast_type = cast_type
 
-        super().__init__(batch_size="singles")
+        super().__init__(batch_size="each")
+
+        self.enforce('arr', np.ndarray, None)
 
     ############################################################################
     def process(self, arr):
