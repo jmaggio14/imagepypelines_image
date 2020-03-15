@@ -15,7 +15,6 @@ def interpolation_type_check(interp):
 
     return True
 
-
 def dtype_type_check(dtype):
     """
     checks to see if the interpolation type is one of the acceptable
@@ -25,7 +24,6 @@ def dtype_type_check(dtype):
         raise BlockError("Invalid Numpy type")
 
     return True
-
 
 def channel_type_check(channel_type):
     """checks if the channel_type is one of ("channels_first","channels_last"),

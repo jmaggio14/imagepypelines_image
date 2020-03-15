@@ -15,6 +15,7 @@ DEFAULT_CHANNEL_TYPE = "channels_last"
 """default channel axis for all images, defaults to 'channels_last'"""
 
 __all__ = [
+            # UTIL
             'ChannelSplit',
             'MergerFactory',
             'RGBMerger',
@@ -22,11 +23,13 @@ __all__ = [
             'Merger3',
             'Merger4',
             'CastTo',
+            # NORMALIZATION
             'NormAB',
             'Norm01',
             'NormDtype',
             'DisplaySafe',
-            # 'ImageFFT',
+            # FILTERING
+            'ImageFFT',
             # 'IdealFreqFilter',
             ]
 
@@ -39,7 +42,7 @@ class ImageBlock(ip.Block):
         channel_type(str): channel_type(str): channel_type, either
             "channels_first" or "channels_last"
     """
-    def __init__(self, channel_type):
+    def __init__(self):
         """instantiates the ImageBlock
 
         Args:
@@ -57,22 +60,9 @@ class ImageBlock(ip.Block):
 
     ############################################################################
     @property
-    def axes(self):
-        if self.channel_type == "channels_first":
-            # (C,H,W) - we want to transform the last two axes
-            return (-2,-1)
-        elif self.channel_type == "channels_last":
-            # (H,W,C) - we want to transform the first two axes
-            return (-3,-2)
+    def h_axis(self):
+        return 0
 
-    @property
-    def channel_axis(self):
-        if self.channel_type == "channels_first":
-            # (C,H,W) - we want the first axis
-            return 0
-        elif self.channel_type == "channels_last":
-            # (H,W,C) - we want the last axis
-            return -1
 
 
 ################################################################################
@@ -187,6 +177,65 @@ class CastTo(ip.Block):
 
 
 ################################################################################
+class Dimensions(ImageBlock):
+    def __init__(self, bands_none_if_2d=False, channel_type=DEFAULT_CHANNEL_TYPE):
+        self.bands_none_if_2d = bands_none_if_2d
+        super().__init__(channel_type=channel_type)
+        self.enforce('image',np.ndarray, [(None,None),(None,None,None)])
+
+    def process(self, image):
+        """retrieves the image height, width, n_bands
+        """
+        # GRAYSCALE CASE
+        if image.ndim == 2:
+            if self.bands_none_if_2d:
+                n_bands = None
+            else:
+                n_bands = 1
+        # MULTIBAND CASE
+        else:
+            n_bands = image.shape[self.channel_axis]
+
+        # fetch the height and width axes using the axes prop
+        h_ax, w_ax = self.axes
+        height = image.shape[h_ax]
+        width = image.shape[w_ax]
+
+        return height, width, n_bands
+
+
+################################################################################
+class FrameSize(ImageBlock):
+    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
+        super().__init__(channel_type=channel_type)
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+    def process(self, image):
+        h_ax,w_ax = self.axes
+        return image.shape[h_ax], image.shape[w_ax]
+
+
+################################################################################
+class Centroid(ImageBlock):
+    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
+        super().__init__(channel_type=channel_type)
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+    def process(self, image):
+
+
+
+
+
+# class Centroid
+# class ExpandDims
+# class FrameSize
+# class Viewer - with a frame_counter
+# class NumberImage
+# class SwapAxes
+
+
+################################################################################
 #                               Normalization
 ################################################################################
 class NormAB(ip.Block):
@@ -272,31 +321,31 @@ class DisplaySafe(NormAB):
 ################################################################################
 #                               Filtering
 ################################################################################
-# class ImageFFT(ImageBlock):
-#     """Performs an FFT on each Image channel independently"""
-#     # NOTE:
-#     #     Make another block with a batch_size = "all"
-#     def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
-#         """instantiates the fft block
-#
-#         Args:
-#             channel_type(str): channel_type, either "channels_first" or
-#                 "channels_last"
-#         """
-#         # call super
-#         super().__init__(channel_type)
-#
-#         # update block tags
-#         self.tags.add("filtering")
-#
-#     ############################################################################
-#     def process(self, images):
-#         """applies the fft to the axes specified by 'channel_type'
-#
-#         Args:
-#             images(np.ndarray): N channel image
-#         """
-#         return np.fft.ftt2(image, axes=self.axes)
+class ImageFFT(ImageBlock):
+    """Performs an FFT on each Image channel independently"""
+    # NOTE:
+    #     Make another block with a batch_size = "all"
+    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
+        """instantiates the fft block
+
+        Args:
+            channel_type(str): channel_type, either "channels_first" or
+                "channels_last"
+        """
+        # call super
+        super().__init__(channel_type)
+
+        # update block tags
+        self.tags.add("filtering")
+
+    ############################################################################
+    def process(self, images):
+        """applies the fft to the axes specified by 'channel_type'
+
+        Args:
+            images(np.ndarray): N channel image
+        """
+        return np.fft.ftt2(image, axes=self.axes)
 #
 #
 # ################################################################################

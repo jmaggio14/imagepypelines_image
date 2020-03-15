@@ -9,30 +9,6 @@ import sys
 from imagepypelines import error as iperror
 
 
-def import_tensorflow():
-    """Direct tensorflow imports are discouraged for imagepypelines developers
-    because it is not automatically installed alongside imagepypelines, and
-    therefore may cause confusing errors to users.
-
-    This function will check if tensorflow is installed and import it if
-    possible. If tensorflow is not importable, it will print out installation
-    instructions.
-
-    Returns:
-        module: module reference to tensorflow
-    """
-    try:
-        import tensorflow as tf
-    except ImportError:
-        iperror("tensorflow must be installed!")
-        iperror("'pip install tensorflow --user' (for CPU only)")
-        iperror("'pip install tensorflow-gpu --user' (for CPU+GPU)")
-        iperror("see README: https://github.com/jmaggio14/imagepypelines")
-        sys.exit(1)
-
-    return tf
-
-
 def import_opencv():
     """Direct opencv imports are discouraged for imagepypelines developers
     because it is not automatically installed alongside imagepypelines, and
