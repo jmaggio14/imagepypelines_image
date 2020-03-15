@@ -4,24 +4,17 @@
 # @github: https://github.com/jmaggio14/imagepypelines
 #
 # Copyright (c) 2018-2020 Jeff Maggio, Nathan Dileas, Ryan Hartzell
-from .util import dtype_type_check, interpolation_type_check
-from .util import channel_type_check, rgb_channel_type_check
+from .util import dtype_type_check, interpolation_type_check, channel_type_check
 from .imports import import_opencv
 
 import numpy as np
 import imagepypelines as ip
 cv2 = import_opencv()
 
+DEFAULT_CHANNEL_TYPE = "channels_last"
+"""default channel axis for all images, defaults to 'channels_last'"""
+
 __all__ = [
-            'NCHANNEL_IMAGE_ARGTYPE',
-            'GRAYSCALE_IMAGE_ARGTYPE',
-            'RGB_IMAGE_CHANNELS_LAST_ARGTYPE',
-            'RGB_IMAGE_CHANNELS_FIRST_ARGTYPE',
-            'NDARRAY_ARGTYPE',
-            'DEFAULT_CHANNEL_TYPE',
-            'BaseImageBlock',
-            'GrayscaleImageBlock',
-            'RGBImageBlock',
             'ChannelSplit',
             'MergerFactory',
             'RGBMerger',
@@ -33,54 +26,12 @@ __all__ = [
             'Norm01',
             'NormDtype',
             'DisplaySafe',
+            # 'ImageFFT',
+            # 'IdealFreqFilter',
             ]
 
-################################################################################
-NCHANNEL_IMAGE_ARGTYPE = [ip.Array(
-                            shapes=[(None,None,None)],
-                            containers=(list,tuple,np.ndarray),)
-                                ]
-"""arg_type dict values for a single image with N channels"""
 
-################################################################################
-GRAYSCALE_IMAGE_ARGTYPE = [ip.Array(
-                            shapes=[(None,None)],
-                            containers=(list,tuple,np.ndarray),)
-                                ]
-"""arg_type dict values for a grayscale image"""
-
-
-################################################################################
-RGB_IMAGE_CHANNELS_LAST_ARGTYPE = [ip.Array(
-                            shapes=[(None,None,3)],
-                            containers=(list,tuple,np.ndarray),)
-                                ]
-"""arg_type dict values for an RGB image with channels last"""
-
-
-################################################################################
-RGB_IMAGE_CHANNELS_FIRST_ARGTYPE = [ip.Array(
-                            shapes=[(None,None,3)],
-                            containers=(list,tuple,np.ndarray),)
-                            ]
-"""arg_type dict values for an RGB image with channels first"""
-
-
-################################################################################
-NDARRAY_ARGTYPE = [ip.Array(
-                            shapes=[None],
-                            containers=(list,tuple,np.ndarray),)
-                            ]
-"""arg_type dict values for an array of any shape"""
-
-
-################################################################################
-DEFAULT_CHANNEL_TYPE = "channels_last"
-"""default channel axis for all images, defaults to 'channels_last'"""
-
-
-################################################################################
-class BaseImageBlock(ip.Block):
+class ImageBlock(ip.Block):
     """Special Block made for imagery with a predefined IO inputs and useful
     properties
 
@@ -88,12 +39,10 @@ class BaseImageBlock(ip.Block):
         channel_type(str): channel_type(str): channel_type, either
             "channels_first" or "channels_last"
     """
-    def __init__(self, arg_types, channel_type):
+    def __init__(self, channel_type):
         """instantiates the ImageBlock
 
         Args:
-            arg_types(dict): a dictionary of types for every arg. Name
-                of argument is key, types are values
             channel_type(str): channel_type(str): channel_type, either
                 "channels_first" or "channels_last"
         """
@@ -101,7 +50,9 @@ class BaseImageBlock(ip.Block):
         channel_type_check(channel_type)
         self.channel_type = channel_type
 
-        super().__init__(arg_types=arg_types, batch_size="singles")
+        # NOTE: add default input types
+
+        super().__init__(batch_size="singles")
         self.tags.add("imagery")
 
     ############################################################################
@@ -113,10 +64,7 @@ class BaseImageBlock(ip.Block):
         elif self.channel_type == "channels_last":
             # (H,W,C) - we want to transform the first two axes
             return (-3,-2)
-        elif self.channel_type == "no_channel":
-            return None
 
-    ############################################################################
     @property
     def channel_axis(self):
         if self.channel_type == "channels_first":
@@ -125,42 +73,14 @@ class BaseImageBlock(ip.Block):
         elif self.channel_type == "channels_last":
             # (H,W,C) - we want the last axis
             return -1
-        elif self.channel_type == "no_channel":
-            return None
-
-
-################################################################################
-class GrayscaleImageBlock(BaseImageBlock):
-    def __init__(self):
-        arg_types = {arg : GRAYSCALE_IMAGE_ARGTYPE for arg in self.args}
-        super().__init__(self, arg_types=arg_types, channel_type="no_channel")
-
-################################################################################
-class RGBImageBlock(BaseImageBlock):
-    def __init__(self, channel_type):
-        # verify channel type is valid
-        rgb_channel_type_check(channel_type)
-
-        # populate it channels first or last as required
-        if channel_type == "channels_first":
-            arg_types = {arg : RGB_IMAGE_CHANNELS_FIRST_ARGTYPE for arg in self.args}
-        else:
-            arg_types = {arg : RGB_IMAGE_CHANNELS_LAST_ARGTYPE for arg in self.args}
-
-        super().__init__(self, arg_types=arg_types, channel_type=channel_type)
 
 
 ################################################################################
 #                               Util
 ################################################################################
-class ChannelSplit(BaseImageBlock):
+class ChannelSplit(ImageBlock):
     # NOTE: ADD EXAMPLES
     """splits the image into it's component channels"""
-    def __init__(self, channel_type):
-        arg_types = {arg : NDARRAY_ARGTYPE for arg in self.args}
-        super().__init__(self, arg_types=arg_types, channel_type=channel_type)
-
-    ############################################################################
     def process(self, image):
         """splits every channel in the image into separate arrays
 
@@ -179,7 +99,7 @@ class ChannelSplit(BaseImageBlock):
 
 ################################################################################
 # Array Merging
-class BaseChannelMerger(BaseImageBlock):
+class BaseChannelMerger(ImageBlock):
     """combines independent channels into one Image"""
     def process(self, *images):
         """merge multiple images into one image with multiple channels
@@ -240,8 +160,7 @@ class CastTo(ip.Block):
 
         # instance variables
         self.cast_type = cast_type
-        arg_types = {self.args[0] : NDARRAY_ARGTYPE}
-        super().__init__(arg_types=arg_types, batch_size="singles")
+        super().__init__(batch_size="singles")
 
     ############################################################################
     def process(self, arr):
@@ -290,8 +209,7 @@ class NormAB(ip.Block):
         self.b = b
         self.cast_type = cast_type
 
-        arg_types = {self.args[0] : NDARRAY_ARGTYPE}
-        super().__init__(arg_types=arg_types, batch_size="singles")
+        super().__init__(batch_size="singles")
 
     ############################################################################
     def process(self, arr):
