@@ -14,6 +14,28 @@ cv2 = import_opencv()
 DEFAULT_CHANNEL_TYPE = "channels_last"
 """default channel axis for all images, defaults to 'channels_last'"""
 
+
+"""
+
+# [x] class Centroid
+# [ ] class ExpandDims
+# [x] class Squeeze
+# [x] class FrameSize
+# [ ] class Viewer - with a frame_counter
+# [x] class NumberImage
+# [ ] class SwapAxes
+# [ ] class ConvertColor
+# [ ] class HistogramEnhance
+# [ ] class HistogramMatch
+# [ ] class HistogramEnhance
+# [ ] class KeypointFactory???
+# [ ] class HarrisCorner
+# [ ] class FastCorner
+
+
+
+
+"""
 __all__ = [
             # UTIL
             'ChannelSplit',
@@ -33,70 +55,82 @@ __all__ = [
             # 'IdealFreqFilter',
             ]
 
+# ImageBlock
+# ChannelSplit
+# MergerFactory
+# for
+# CastTo
+# Squeeze
+# Dimensions
+# FrameSize
+# Centroid
+# NumberImage
+# NormAB
+# Norm01
+# NormDtype
+# DisplaySafe
+# ImageFFT
+#
 
 class ImageBlock(ip.Block):
     """Special Block made for imagery with a predefined IO inputs and useful
     properties
 
-    Attributes:
-        channel_type(str): channel_type(str): channel_type, either
-            "channels_first" or "channels_last"
     """
     def __init__(self):
-        """instantiates the ImageBlock
-
-        Args:
-            channel_type(str): channel_type(str): channel_type, either
-                "channels_first" or "channels_last"
-        """
-        # check the channel type
-        channel_type_check(channel_type)
-        self.channel_type = channel_type
-
+        """instantiates the ImageBlock"""
         # NOTE: add default input types
-
         super().__init__(batch_size="each")
         self.tags.add("imagery")
-
-    ############################################################################
-    @property
-    def h_axis(self):
-        return 0
-
+        self.h_axis = 0 # height axis
+        self.w_axis = 1 # width axis
+        self.b_axis = 2 # band axis
 
 
 ################################################################################
 #                               Util
 ################################################################################
 class ChannelSplit(ImageBlock):
-    def __init__(self, channel_type="channels_last"):
-        super().__init__(channel_type=channel_type)
+    """splits images into separate component channels
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self):
+        """Instantiates the object"""
+        super().__init__()
         self.enforce('image', np.ndarray, [(None,None,None)])
 
-    # NOTE: ADD EXAMPLES
-    """splits the image into it's component channels"""
     def process(self, image):
         """splits every channel in the image into separate arrays
 
         Args:
             image(np.ndarray): image to channel split
         """
-        n_channels = image.shape[self.channel_axis]
-        if self.channel_type == "channels_last":
-            channels = tuple(image[Ellipsis,ch] for ch in range(n_channels))
-        else: # self.channel_type == channels_first
-            # this line will have to be updated if batching is supported
-            channels = tuple(image[ch,Ellipsis] for ch in range(n_channels))
-
+        channels = tuple(image[:,:,ch] for ch in range(image.shape[self.b_axis]))
         return channels
 
 
 ################################################################################
 # Array Merging
 class BaseChannelMerger(ImageBlock):
-    """combines independent channels into one Image"""
-    def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
+    """combines independent channels into one Image
+
+    Default Enforcement:
+         image
+            type: np.ndarray
+            shapes: [(None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self):
+        super().__init__()
 
         for arg in self.args:
             self.enforce(arg, np.ndarray, [(None,None)])
@@ -107,7 +141,7 @@ class BaseChannelMerger(ImageBlock):
         Args:
             *images(variable length tuple of images):
         """
-        return np.stack(images, axis=self.channel_axis)
+        return np.stack(images, axis=self.b_axis)
 
 
 class MergerFactory(object):
@@ -132,8 +166,28 @@ class MergerFactory(object):
             args = channel_names
         else:
             args = ["channel%s" % i for i in range(n_channels)]
+
+        base_str = \
+"""{}) {}
+   type: np.ndarray
+   shapes: [(None,None)]"""
+
+        doc = \
+"""Combines independent channels into one Image
+
+Default Enforcement:
+     {}
+
+Batch Size:
+    "each"
+""".format('\n\t'.join(base_str.format(i,cname) for i,cname in enumerate(channel_names)))
+
         cls_name = "ChannelMerge%s" % n_channels
-        channel_merger = type(cls_name, (BaseChannelMerger,), {'args':args})
+        channel_merger = type(cls_name,
+                                (BaseChannelMerger,),
+                                 {'args':args,
+                                 '__doc__':doc})
+
         return channel_merger
 
 # generate example Merger Classes
@@ -150,10 +204,20 @@ class CastTo(ip.Block):
     Attributes:
         cast_type (:obj:`numpy.dtype`): np.dtype the final array is casted to
 
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
     Batch Size:
-        "all"
+        "each"
     """
     def __init__(self, cast_type):
+        """Instantiates the object
+
+        Args:
+            cast_type (:obj:`numpy.dtype`): np.dtype to case the array to
+        """
         # Arg Checking
         # cast_type must be a NUMPY type
         dtype_type_check(cast_type)
@@ -177,14 +241,64 @@ class CastTo(ip.Block):
 
 
 ################################################################################
+class Squeeze(ip.Block):
+    """Removes single dimension axes from the
+    """
+    def __init__(self):
+        super().__init__()
+        self.enforce('arr', np.ndarray, None)
+
+    def process(self, arr):
+        return np.squeeze(arr)
+
+
+################################################################################
 class Dimensions(ImageBlock):
-    def __init__(self, bands_none_if_2d=False, channel_type=DEFAULT_CHANNEL_TYPE):
+    """Retrieves the dimensions of the image, including number of bands. If
+    `bands_none_if_2d` is True, then grayscale images will return
+    n_bands = None. Otherwise n_bands will be equal to 1 for grayscale imagery.
+
+    Attributes:
+        bands_none_if_2d(bool): whether or not to return n_bands = None for
+            grayscale imagery instead of n_bands = 1.
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self, bands_none_if_2d=False):
+        """Instantiates the object
+
+        Args:
+            bands_none_if_2d(bool): whether or not to return n_bands = None for
+                grayscale imagery instead of n_bands = 1.
+        """
         self.bands_none_if_2d = bands_none_if_2d
-        super().__init__(channel_type=channel_type)
-        self.enforce('image',np.ndarray, [(None,None),(None,None,None)])
+        super().__init__()
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
-        """retrieves the image height, width, n_bands
+        """Retrieves the height, width, and number of bands in the image.
+
+        if `bands_none_if_2d` is True, then grayscale images will return
+        n_bands = None, otherwise n_bands = 1 for grayscale images.
+
+        Notes:
+            assume image bands are the last axis
+
+        Args:
+            image(np.ndarray): the input image
+
+        Returns:
+            (tuple): tuple containing:
+
+                height(int): number of rows in image
+                width(int): number of columns in image
+                n_bands(int): number of bands in image
         """
         # GRAYSCALE CASE
         if image.ndim == 2:
@@ -194,45 +308,146 @@ class Dimensions(ImageBlock):
                 n_bands = 1
         # MULTIBAND CASE
         else:
-            n_bands = image.shape[self.channel_axis]
+            n_bands = image.shape[self.b_axis]
 
         # fetch the height and width axes using the axes prop
-        h_ax, w_ax = self.axes
-        height = image.shape[h_ax]
-        width = image.shape[w_ax]
+        height = image.shape[self.h_axis]
+        width = image.shape[self.w_axis]
 
         return height, width, n_bands
 
 
 ################################################################################
 class FrameSize(ImageBlock):
-    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
-        super().__init__(channel_type=channel_type)
+    """Retrieves the size of the image frame
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self):
+        """Instantiates the object"""
+        super().__init__()
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
-        h_ax,w_ax = self.axes
-        return image.shape[h_ax], image.shape[w_ax]
+        """Retrieves the height and width of the image.
+
+        Args:
+            image(np.ndarray): the input image
+
+        Returns:
+            (tuple): tuple containing:
+
+                height(int): number of rows in image
+                width(int): number of columns in image
+        """
+        return image.shape[self.h_axis], image.shape[self.w_axis]
 
 
 ################################################################################
 class Centroid(ImageBlock):
-    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
-        super().__init__(channel_type=channel_type)
+    """Retrieves the central pixel in the image, rounds down to integer
+    if an image dimension has an odd length
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self):
+        """Instantiates the object"""
+        super().__init__()
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
+        """Retrieves the central row and column in an image.
+
+        Args:
+            image(np.ndarray): the input image
+
+        Returns:
+            (tuple): tuple containing:
+
+                center_h(int): central row index
+                center_w(int): central col index
+        """
+        return image.shape[self.h_axis]//2, image.shape[self.w_axis]//2
 
 
+################################################################################
+class NumberImage(ImageBlock):
+    """Numbers incoming images
+
+    Attributes:
+        text_origin(:obj:`tuple` of :obj:`int`):
+        index(int): frame number index
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self, text_origin=(.9,.9), start_at=1):
+        """Instantiates the object
+
+        Args:
+            text_origin(:obj:`tuple` of :obj:`float`): the origin of the frame
+                number as fraction of the image dimensions.
+                start_at(int): integer to start counting at
+        """
+        self.text_origin = text_origin
+        self.index = start_at
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+    def process(self, image):
+        """Adds a number to the corner of an image
+
+        Args:
+            img (np.ndarray): image
+
+        Returns:
+            :obj:`numpy.ndarray`: numbered image
+        """
+        width = image.shape[self.w_axis]
+        height = image.shape[self.h_axis]
+
+        # make text and bounding rectangle
+        text = str(self.index)
+        rect_w = len(text) * 16
+        rect_h = 16
 
 
+        start = (self.text_origin[1]*width, self.text_origin[0]*height)
+        end = (min(width, start[0]+rect_w), min(height, start[1]+rect_h))
 
-# class Centroid
-# class ExpandDims
-# class FrameSize
-# class Viewer - with a frame_counter
-# class NumberImage
-# class SwapAxes
+        # draw black bounding rectangle
+        image = cv2.rectangle(image,
+                                start_point=loc,
+                                end_point=end,
+                                color=(0,0,0),
+                                thickness=-1
+                                )
+        # draw the white text
+        image = cv2.putText(image,
+                            text=str(self.index),
+                            org=start,
+                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+                            fontScale=.5,
+                            color=(255,255,255),
+                            thickness=2,
+                            bottomLeftOrigin=False)
+        self.index += 1
 
 
 ################################################################################
@@ -249,6 +464,11 @@ class NormAB(ip.Block):
         b (int,float): maximum of normalization range
         cast_type (:obj:`numpy.dtype`): np.dtype the final array is casted to. default
             is float64
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: None
 
     Batch Size:
         "each"
@@ -297,6 +517,15 @@ class Norm01(NormAB):
     Can be used to prepare images for file output.
     Equivalent to a 0% histogram stretch.
     Works by converting to float64, then stretching/shifting, then quantizing.
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: None
+
+    Batch Size:
+        "each"
+
     """
     def __init__(self, cast_type=np.float64):
         super().__init__(0, 1, cast_type)
@@ -305,6 +534,15 @@ class Norm01(NormAB):
 ################################################################################
 class NormDtype(NormAB):
     """normalizes to [dtype_min, dtype_max] and then casts to given cast_type
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: None
+
+    Batch Size:
+        "each"
+
     """
     def __init__(self, cast_type=np.float64):
         dtype_info = np.iinfo(cast_type)
@@ -313,7 +551,16 @@ class NormDtype(NormAB):
 
 ################################################################################
 class DisplaySafe(NormAB):
-    """normalizes to [0,255] and bins to a displayable bitdepth"""
+    """normalizes to [0,255] and bins to a displayable bitdepth
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
     def __init__(self):
         super().__init__(0, 255, cast_type=np.uint8)
 
@@ -322,16 +569,20 @@ class DisplaySafe(NormAB):
 #                               Filtering
 ################################################################################
 class ImageFFT(ImageBlock):
-    """Performs an FFT on each Image channel independently"""
+    """Performs an FFT on each Image channel independently
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
     # NOTE:
     #     Make another block with a batch_size = "all"
-    def __init__(self, channel_type=DEFAULT_CHANNEL_TYPE):
-        """instantiates the fft block
-
-        Args:
-            channel_type(str): channel_type, either "channels_first" or
-                "channels_last"
-        """
+    def __init__(self):
+        """instantiates the fft block"""
         # call super
         super().__init__(channel_type)
 
@@ -339,13 +590,13 @@ class ImageFFT(ImageBlock):
         self.tags.add("filtering")
 
     ############################################################################
-    def process(self, images):
+    def process(self, image):
         """applies the fft to the axes specified by 'channel_type'
 
         Args:
             images(np.ndarray): N channel image
         """
-        return np.fft.ftt2(image, axes=self.axes)
+        return np.fft.ftt2(image, axes=(self.h_axis,self.w_axis))
 #
 #
 # ################################################################################
