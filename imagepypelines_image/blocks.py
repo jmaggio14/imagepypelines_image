@@ -9,6 +9,7 @@ from .imports import import_opencv
 
 import numpy as np
 import imagepypelines as ip
+import time
 cv2 = import_opencv()
 
 DEFAULT_CHANNEL_TYPE = "channels_last"
@@ -31,27 +32,36 @@ DEFAULT_CHANNEL_TYPE = "channels_last"
 # [ ] class KeypointFactory???
 # [ ] class HarrisCorner
 # [ ] class FastCorner
+# [ ] class DrawPoints
 
 
 
 
 """
 __all__ = [
-            # UTIL
+            # Viewing
+            'SequenceViewer',
+            'NumberImage',
+            'DisplaySafe',
+            'ImageFFT',
+            # Merging/splitting channels
             'ChannelSplit',
+            'BaseChannelMerger',
             'MergerFactory',
             'RGBMerger',
             'RGBAMerger',
             'Merger3',
             'Merger4',
+            # dtype and dimensions
             'CastTo',
-            # NORMALIZATION
+            'Squeeze',
+            'Dimensions',
+            'FrameSize',
+            'Centroid',
+            # normalizations
             'NormAB',
             'Norm01',
             'NormDtype',
-            'DisplaySafe',
-            # FILTERING
-            'ImageFFT',
             # 'IdealFreqFilter',
             ]
 
@@ -85,6 +95,78 @@ class ImageBlock(ip.Block):
         self.h_axis = 0 # height axis
         self.w_axis = 1 # width axis
         self.b_axis = 2 # band axis
+
+
+################################################################################
+#                               Display
+################################################################################
+class SequenceViewer(ImageBlock):
+    """Retrieves the size of the image frame
+
+    Attributes:
+        pause_for(int): the amount of time in milliseconds to pause
+            between images
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self, pause_for=30):
+        """Instantiates the SequenceViewer
+
+        Arg:
+            pause_for(int): the amount of time in milliseconds to pause
+                between images. defaults to 30ms
+        """
+        self.pause_for = int(pause_for)
+        super().__init__()
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+        # setup the opencv window
+        self._open_window()
+
+    ############################################################################
+    def process(self, image):
+        """Displays the image in a window
+
+        Args:
+            img (np.ndarray): image
+
+        Returns:
+            None
+        """
+        cv2.imshow(self.id, image)
+        cv2.waitKey(self.pause_for)
+
+    ############################################################################
+    def __setstate__(self, state):
+        """sets the state and reopens the image window"""
+        super().__setstate__(state)
+        self._open_window()
+
+    ############################################################################
+    def copy(self):
+        """copies the block and opens up a new window"""
+        cop = super().copy()
+        self._open_window(cop.id)
+
+    ############################################################################
+    def deepcopy(self):
+        """deepcopies the block and opens up a new window"""
+        cop = super().deepcopy()
+        self._open_window(cop.id)
+
+    ############################################################################
+    def _open_window(self, wid=None):
+        """launches the opencv viewing window"""
+        if wid is None:
+            wid = self.id
+        cv2.namedWindow(wid, cv2.WINDOW_AUTOSIZE)
+
 
 
 ################################################################################
@@ -167,26 +249,25 @@ class MergerFactory(object):
         else:
             args = ["channel%s" % i for i in range(n_channels)]
 
-        base_str = \
-"""{}) {}
-   type: np.ndarray
-   shapes: [(None,None)]"""
-
-        doc = \
-"""Combines independent channels into one Image
-
-Default Enforcement:
-     {}
-
-Batch Size:
-    "each"
-""".format('\n\t'.join(base_str.format(i,cname) for i,cname in enumerate(channel_names)))
+#         base_str = \
+# """{}) {}
+#    type: np.ndarray
+#    shapes: [(None,None)]"""
+#
+#         doc = \
+# """Combines independent channels into one Image
+#
+# Default Enforcement:
+#      {}
+#
+# Batch Size:
+#     "each"
+# """.format('\n\t'.join(base_str.format(i,cname) for i,cname in enumerate(channel_names)))
 
         cls_name = "ChannelMerge%s" % n_channels
         channel_merger = type(cls_name,
                                 (BaseChannelMerger,),
-                                 {'args':args,
-                                 '__doc__':doc})
+                                 {'args':args})
 
         return channel_merger
 
@@ -398,7 +479,7 @@ class NumberImage(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, text_origin=(.9,.9), start_at=1):
+    def __init__(self, text_origin=(.95,.95), start_at=1):
         """Instantiates the object
 
         Args:
@@ -408,6 +489,7 @@ class NumberImage(ImageBlock):
         """
         self.text_origin = text_origin
         self.index = start_at
+        super().__init__()
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
@@ -424,30 +506,33 @@ class NumberImage(ImageBlock):
 
         # make text and bounding rectangle
         text = str(self.index)
-        rect_w = len(text) * 16
-        rect_h = 16
+        rect_w = len(text) * 20
+        rect_h = 20
 
 
-        start = (self.text_origin[1]*width, self.text_origin[0]*height)
+        start = (int(self.text_origin[1]*width), int(self.text_origin[0]*height))
         end = (min(width, start[0]+rect_w), min(height, start[1]+rect_h))
 
-        # draw black bounding rectangle
+        # rect_color = (0,0,0) if image.ndim > 2 else 0
+        # # draw black bounding rectangle
         image = cv2.rectangle(image,
-                                start_point=loc,
-                                end_point=end,
-                                color=(0,0,0),
-                                thickness=-1
+                                start,
+                                end,
+                                (0,0,0),
+                                -1
                                 )
-        # draw the white text
+        # # draw the white text
+        # text_color = (255,255,255) if image.ndim > 2 else 255
         image = cv2.putText(image,
                             text=str(self.index),
-                            org=start,
+                            org=(end[0]-rect_w+4, end[1]-4),
                             fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                             fontScale=.5,
                             color=(255,255,255),
-                            thickness=2,
+                            thickness=1,
                             bottomLeftOrigin=False)
         self.index += 1
+        return image
 
 
 ################################################################################

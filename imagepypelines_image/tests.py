@@ -23,8 +23,8 @@ lennas = [ip.lenna() for i in range(10)]
 # processed = pipeline.process(lennas)
 
 
-bad_processed = pipeline.process( np.random.rand(512,512) )
-bad_processed = pipeline.process( np.random.rand(512,512), skip_checks=True )
+bad_processed = pipeline.process([np.random.rand(512,512)] )
+bad_processed = pipeline.process([np.random.rand(512,512)], skip_checks=True )
 
 
 import pdb; pdb.set_trace()
