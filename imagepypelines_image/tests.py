@@ -2,7 +2,7 @@ import imagepypelines as ip
 import numpy as np
 
 # make sure the image plugin is installed
-ip.require_plugin("image")
+ip.require("image")
 
 
 
