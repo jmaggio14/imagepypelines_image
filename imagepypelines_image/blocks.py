@@ -3,7 +3,7 @@
 # @License: https://github.com/jmaggio14/imagepypelines/blob/master/LICENSE
 # @github: https://github.com/jmaggio14/imagepypelines
 #
-# Copyright (c) 2018-2020 Jeff Maggio, Nathan Dileas, Ryan Hartzell
+# Copyright (c) 2018-2020 Jeff Maggio, Ryan Hartzell, and collaborators
 from .util import dtype_type_check, interpolation_type_check, channel_type_check
 from .imports import import_opencv
 
@@ -101,7 +101,7 @@ class ImageBlock(ip.Block):
 #                               Display
 ################################################################################
 class SequenceViewer(ImageBlock):
-    """Retrieves the size of the image frame
+    """Display the given images.
 
     Attributes:
         pause_for(int): the amount of time in milliseconds to pause
@@ -126,8 +126,15 @@ class SequenceViewer(ImageBlock):
         super().__init__()
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
-        # setup the opencv window
+    ############################################################################
+    def preprocess(self):
+        """opens the opencv image window"""
         self._open_window()
+
+    ############################################################################
+    def postprocess(self):
+        """closes the opencv image window"""
+        self._close_window()
 
     ############################################################################
     def process(self, image):
@@ -143,30 +150,14 @@ class SequenceViewer(ImageBlock):
         cv2.waitKey(self.pause_for)
 
     ############################################################################
-    def __setstate__(self, state):
-        """sets the state and reopens the image window"""
-        super().__setstate__(state)
-        self._open_window()
-
-    ############################################################################
-    def copy(self):
-        """copies the block and opens up a new window"""
-        cop = super().copy()
-        self._open_window(cop.id)
-
-    ############################################################################
-    def deepcopy(self):
-        """deepcopies the block and opens up a new window"""
-        cop = super().deepcopy()
-        self._open_window(cop.id)
-
-    ############################################################################
-    def _open_window(self, wid=None):
+    def _open_window(self):
         """launches the opencv viewing window"""
-        if wid is None:
-            wid = self.id
-        cv2.namedWindow(wid, cv2.WINDOW_AUTOSIZE)
+        cv2.namedWindow(self.id, cv2.WINDOW_AUTOSIZE)
 
+    ############################################################################
+    def _close_window(self):
+        """closes the opencv viewing window"""
+        cv2.destroyWindow(self.id)
 
 
 ################################################################################
@@ -465,11 +456,15 @@ class Centroid(ImageBlock):
 
 ################################################################################
 class NumberImage(ImageBlock):
-    """Numbers incoming images
+    """Numbers incoming images. Resets the number index before every process
+    run
 
     Attributes:
-        text_origin(:obj:`tuple` of :obj:`int`):
-        index(int): frame number index
+        start_at(int): the index to start at for every processing run
+        index(int): The image index. The number that will appear in the corner
+            of the image
+        font_data(dict): dictionary of keyword arguments for cv2.putText
+
 
     Default Enforcement:
         1) image
@@ -479,18 +474,25 @@ class NumberImage(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, text_origin=(.95,.95), start_at=1):
+    def __init__(self, start_at=1):
         """Instantiates the object
 
         Args:
-            text_origin(:obj:`tuple` of :obj:`float`): the origin of the frame
-                number as fraction of the image dimensions.
-                start_at(int): integer to start counting at
+            start_at(int): integer to start counting at
         """
-        self.text_origin = text_origin
-        self.index = start_at
+        self.start_at = start_at
+        self.index = self.start_at
+        self.font_data = {'fontFace' : cv2.FONT_HERSHEY_PLAIN,
+                            'fontScale' : 1.5,
+                            'thickness' : 1,
+                            }
         super().__init__()
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+
+    def preprocess(self):
+        """resets the number index"""
+        self.index = self.start_at
 
     def process(self, image):
         """Adds a number to the corner of an image
@@ -506,13 +508,10 @@ class NumberImage(ImageBlock):
 
         # make text and bounding rectangle
         text = str(self.index)
-        rect_w = len(text) * 20
-        rect_h = 20
+        (rect_w, rect_h), _ = cv2.getTextSize(text, **self.font_data)
 
-
-        start = (int(self.text_origin[1]*width), int(self.text_origin[0]*height))
-        end = (min(width, start[0]+rect_w), min(height, start[1]+rect_h))
-
+        end = (width-1,height-1)
+        start = (end[0]-rect_w, end[1]-rect_h)
         # rect_color = (0,0,0) if image.ndim > 2 else 0
         # # draw black bounding rectangle
         image = cv2.rectangle(image,
@@ -523,14 +522,13 @@ class NumberImage(ImageBlock):
                                 )
         # # draw the white text
         # text_color = (255,255,255) if image.ndim > 2 else 255
+        text_org = (end[0]-rect_w, end[1])
         image = cv2.putText(image,
-                            text=str(self.index),
-                            org=(end[0]-rect_w+4, end[1]-4),
-                            fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                            fontScale=.5,
+                            text,
+                            text_org,
                             color=(255,255,255),
-                            thickness=1,
-                            bottomLeftOrigin=False)
+                            **self.font_data
+                            )
         self.index += 1
         return image
 
@@ -684,6 +682,55 @@ class ImageFFT(ImageBlock):
         return np.fft.ftt2(image, axes=(self.h_axis,self.w_axis))
 #
 #
+
+
+################################################################################
+#                               Enhancement
+################################################################################
+
+# def lut_factory(func, a=0, b=255):
+#
+#
+# class BaseLUT(ImageBlock):
+#     """creates a lookup table from the given function along the range x.
+#     func will be called once for every element in the range
+#
+#
+#     Attributes:
+#         lut(np.ndarray): the lookup table
+#         x_range(np.ndarray): the range over which this lookup table wil
+#     """
+#     def __init__(self, func, a=0, b=256):
+#         # instantiate ImageBlock
+#         super().__init__()
+#
+#         # generate the range
+#         x_range = np.arange(a, b)
+#
+#         # create an empty array to populate
+#         self.lut = np.zeros( x_range.size )
+#
+#         # populate the LUT
+#         for i,x in enumerate(x_range.flat):
+#             self.lut[i] = func(x)
+#
+#         # enforce images
+#         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+#
+#         self.func = func
+#         self.x_range = x_range
+#
+#     def process(self, image):
+#         return self.lut[image]
+
+
+
+
+
+
+
+
+
 # ################################################################################
 # class IdealFreqFilter(ImageBlock):
 #     """Calculates and applies an MTF to a given fft input. Does not perform an
