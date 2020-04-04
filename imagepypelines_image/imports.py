@@ -6,7 +6,7 @@
 # Copyright (c) 2018-2020 Jeff Maggio, Ryan Hartzell, and collaborators
 #
 import sys
-from imagepypelines import error as iperror
+from imagepypelines import MASTER_LOGGER
 
 
 def import_opencv():
@@ -24,8 +24,8 @@ def import_opencv():
     try:
         import cv2
     except ImportError:
-        iperror("imagepypelines requires opencv to be installed separately!")
-        iperror("see README: https://github.com/jmaggio14/imagepypelines")
+        MASTER_LOGGER.error("imagepypelines_image requires opencv to be installed separately!")
+        MASTER_LOGGER.error("see README: https://github.com/jmaggio14/imagepypelines")
         sys.exit(1)
 
     return cv2
