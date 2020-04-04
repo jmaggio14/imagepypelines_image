@@ -8,19 +8,19 @@ ip.require("image")
 
 
 tasks = {
-        'lennas':ip.Input(0),
+        'geckos':ip.Input(0),
         # normalize the inputs
-        'float_lennas':(ip.image.CastTo(np.float64), 'lennas'),
-        'normalized_lennas': (ip.image.NormAB(0,255), 'float_lennas'),
-        'display_safe' : (ip.image.DisplaySafe(), 'normalized_lennas'),
+        'float_geckos':(ip.image.CastTo(np.float64), 'geckos'),
+        'normalized_geckos': (ip.image.NormAB(0,255), 'float_geckos'),
+        'display_safe' : (ip.image.DisplaySafe(), 'normalized_geckos'),
         # split into RGB channels
         ('red','green','blue') : (ip.image.ChannelSplit(), 'display_safe'),
         }
 
 pipeline = ip.Pipeline(tasks, name='Lenna')
 
-lennas = [ip.lenna() for i in range(10)]
-# processed = pipeline.process(lennas)
+geckos = [ip.image.gecko() for i in range(10)]
+# processed = pipeline.process(geckos)
 
 
 bad_processed = pipeline.process([np.random.rand(512,512)] )
