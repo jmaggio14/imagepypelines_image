@@ -90,7 +90,7 @@ class ImageBlock(ip.Block):
     def __init__(self):
         """instantiates the ImageBlock"""
         # NOTE: add default input types
-        super().__init__(batch_size="each")
+        super().__init__(batch_type="each")
         self.tags.add("imagery")
         self.h_axis = 0 # height axis
         self.w_axis = 1 # width axis
@@ -296,7 +296,7 @@ class CastTo(ip.Block):
 
         # instance variables
         self.cast_type = cast_type
-        super().__init__(batch_size="each")
+        super().__init__(batch_type="each")
         self.enforce('arr', np.ndarray, [(None,None),(None,None,None)])
 
     ############################################################################
@@ -572,7 +572,7 @@ class NormAB(ip.Block):
         self.b = b
         self.cast_type = cast_type
 
-        super().__init__(batch_size="each")
+        super().__init__(batch_type="each")
 
         self.enforce('arr', np.ndarray, None)
 
@@ -663,7 +663,7 @@ class ImageFFT(ImageBlock):
         "each"
     """
     # NOTE:
-    #     Make another block with a batch_size = "all"
+    #     Make another block with a batch_type = "all"
     def __init__(self):
         """instantiates the fft block"""
         # call super
