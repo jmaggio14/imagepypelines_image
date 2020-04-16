@@ -24,8 +24,8 @@ def import_opencv():
     try:
         import cv2
     except ImportError:
-        MASTER_LOGGER.error("imagepypelines_image requires opencv to be installed separately!")
-        MASTER_LOGGER.error("see README: https://github.com/jmaggio14/imagepypelines")
+        MASTER_LOGGER.error("imagepypelines_image requires opencv to be installed separately")
+        MASTER_LOGGER.error("try 'pip install opencv-python' or install from source (see https://docs.opencv.org/master/da/df6/tutorial_py_table_of_contents_setup.html)")
         sys.exit(1)
 
     return cv2

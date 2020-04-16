@@ -8,13 +8,10 @@ from .util import dtype_type_check, interpolation_type_check, channel_type_check
 from .imports import import_opencv
 
 import numpy as np
-import imagepypelines as ip
 import time
+import matplotlib.pyplot as plt
 cv2 = import_opencv()
-
-DEFAULT_CHANNEL_TYPE = "channels_last"
-"""default channel axis for all images, defaults to 'channels_last'"""
-
+import imagepypelines as ip
 
 """
 
@@ -33,14 +30,15 @@ DEFAULT_CHANNEL_TYPE = "channels_last"
 # [ ] class HarrisCorner
 # [ ] class FastCorner
 # [ ] class DrawPoints
-
-
+# [ ] class DrawCircle
+# [ ] class DrawRect
 
 
 """
 __all__ = [
             # Viewing
             'SequenceViewer',
+            'QuickView',
             'NumberImage',
             'DisplaySafe',
             'ImageFFT',
@@ -138,10 +136,10 @@ class SequenceViewer(ImageBlock):
 
     ############################################################################
     def process(self, image):
-        """Displays the image in a window
+        """Displays the image in an opencv window
 
         Args:
-            img (np.ndarray): image
+            image (np.ndarray): image
 
         Returns:
             None
@@ -158,6 +156,72 @@ class SequenceViewer(ImageBlock):
     def _close_window(self):
         """closes the opencv viewing window"""
         cv2.destroyWindow(self.id)
+
+################################################################################
+
+class QuickView(ImageBlock):
+    """Image Viewer that uses matplotlib internally. Nearly always guarenteed
+    to work, but timing will be less accurate especially for short timeframes
+
+    This viewer will work with online sphinx-generated examples
+
+    Attributes:
+        pause_for(int): the amount of time in milliseconds to pause
+            between images
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    def __init__(self, pause_for=500, close_fig=False):
+        """Instantiates the SequenceViewer
+
+        Arg:
+            pause_for(int): the amount of time in milliseconds to pause
+                between images. defaults to 500ms
+            close_fig(bool): whether or not to close the matplotlib figure after
+                processing is done. defaults to False
+        """
+        self.pause_for = pause_for
+        self.close_fig = close_fig
+        self.fig = None
+        self.timer = ip.Timer()
+        super().__init__()
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+
+    def preprocess(self):
+        self.fig = plt.figure()
+        # make this figure interactive
+        plt.ion()
+        # display it
+        plt.show()
+
+    def process(self, image):
+        """Displays the image in a matplotlib figure
+
+        Args:
+            image (np.ndarray): image
+
+        Returns:
+            None
+        """
+        # show the image
+        plt.imshow(image,cmap="rgb")
+        # pause after converting to seconds
+        plt.pause(self.pause_for / 1000.0)
+
+    def postprocess(self):
+        """closes the matplotlib figure"""
+        if self.close_fig:
+            plt.close(self.fig)
+
+
+
+
 
 
 ################################################################################
@@ -667,14 +731,14 @@ class ImageFFT(ImageBlock):
     def __init__(self):
         """instantiates the fft block"""
         # call super
-        super().__init__(channel_type)
+        super().__init__()
 
         # update block tags
         self.tags.add("filtering")
 
     ############################################################################
     def process(self, image):
-        """applies the fft to the axes specified by 'channel_type'
+        """applies the fft to each channel'
 
         Args:
             images(np.ndarray): N channel image
@@ -682,6 +746,52 @@ class ImageFFT(ImageBlock):
         return np.fft.ftt2(image, axes=(self.h_axis,self.w_axis))
 #
 #
+
+# CONVERT TO
+################################################################################
+# def convert_to(fname, format, output_dir=None, no_overwrite=False):
+#     """converts an image file to the specificed format
+#     "example.png" --> "example.jpg"
+#
+#     Args:
+#         fname (str): the filename of the image you want to convert
+#         format (str): the format you want to convert to, acceptable options are:
+#             'png','jpg','tiff','tif','bmp','dib','jp2','jpe','jpeg','webp',
+#             'pbm','pgm','ppm','sr','ras'.
+#         output_dir (str,None): optional, a directory to save the reformatted
+#             image to. Default = None
+#         no_overwrite (bool): whether of not to prevent this function from
+#             overwriting a file if it already exists. see
+#             :prevent_overwrite:~`imagepypelines.prevent_overwrite` for
+#             more information
+#
+#     Returns:
+#         str: the output filename that the converted file was saved to
+#     """
+#     # eg convert .PNG --> png if required
+#     format = format.lower().replace('.','')
+#
+#     if format not in IMAGE_EXTENSIONS:
+#         raise TypeError("format must be one of {}".format(IMAGE_EXTENSIONS))
+#
+#     file_path, ext = os.path.splitext(fname)
+#     if output_dir is None:
+#         out_name = file_path + '.' + format
+#     else:
+#         basename = os.path.basename(file_path)
+#         out_name = os.path.join(output_dir, basename + '.' + format)
+#
+#     if no_overwrite:
+#         # check if the file exists
+#         out_name = prevent_overwrite(out_name)
+#
+#     img = cv2.imread(fname)
+#     if img is None:
+#         raise RuntimeError("Unable to open up file {}".format(fname))
+#
+#     cv2.imwrite(out_name, img)
+#
+#     return out_name
 
 
 ################################################################################

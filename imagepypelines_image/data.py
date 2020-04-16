@@ -19,7 +19,7 @@ def standard_image_gen():
     generator function to yield all standard images sequentially
     useful for testing
     """
-    for img_name in list_standard_images():
+    for img_name in STANDARD_IMAGES.values()():
         yield get_standard_image(img_name)
 
 def standard_images():
