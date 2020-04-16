@@ -210,7 +210,7 @@ class QuickView(ImageBlock):
             None
         """
         # show the image
-        plt.imshow(image,cmap="rgb")
+        plt.imshow(image)
         # pause after converting to seconds
         plt.pause(self.pause_for / 1000.0)
 
