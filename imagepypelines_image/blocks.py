@@ -16,7 +16,7 @@ import imagepypelines as ip
 """
 
 # [x] class Centroid
-# [ ] class ExpandDims
+# [x] class ExpandDims  --> Unsqueeze
 # [x] class Squeeze
 # [x] class FrameSize
 # [ ] class Viewer - with a frame_counter
@@ -39,9 +39,9 @@ __all__ = [
             # Viewing
             'SequenceViewer',
             'QuickView',
+            'CompareView',
             'NumberImage',
             'DisplaySafe',
-            'ImageFFT',
             # Merging/splitting channels
             'ChannelSplit',
             'BaseChannelMerger',
@@ -53,6 +53,7 @@ __all__ = [
             # dtype and dimensions
             'CastTo',
             'Squeeze',
+            'Unsqueeze',
             'Dimensions',
             'FrameSize',
             'Centroid',
@@ -60,7 +61,9 @@ __all__ = [
             'NormAB',
             'Norm01',
             'NormDtype',
-            # 'IdealFreqFilter',
+            # Filtering
+            'ImageFFT',
+            'ImageIFFT'
             ]
 
 # ImageBlock
@@ -84,16 +87,55 @@ class ImageBlock(ip.Block):
     """Special Block made for imagery with a predefined IO inputs and useful
     properties
 
+    Attributes:
+        order(str): The order of the image axes. Default order is 'HWC', which
+            sets (self.h_axis, self.w_axis, self.c_axis) = (0, 1, 2). Allowed
+            combinations are ['HWC', 'WHC', 'CWH', 'CHW']
+        h_axis(int): Index of the height axis.
+        w_axis(int): Index of the width axis.
+        c_axis(int): Index of the channel axis.
     """
-    def __init__(self):
+    def __init__(self, order="HWC"):
         """instantiates the ImageBlock"""
         # NOTE: add default input types
         super().__init__(batch_type="each")
         self.tags.add("imagery")
-        self.h_axis = 0 # height axis
-        self.w_axis = 1 # width axis
-        self.b_axis = 2 # band axis
 
+        # RH:: We need to standardize on vocabulary
+        # rows = height; columns = width; depth = bands = channels
+        # personally, I think we should alias these with getters and provide a
+        # setter utility for axes_order/order a.k.a self.order = "HWC" ->(0,1,2)
+        # As a rule, channel axis never ends up in the middle
+
+        if order == "HWC":
+
+            # Setup defaults = "HWC" -> (0,1,2)
+            self.h_axis = 0 # height axis
+            self.w_axis = 1 # width axis
+            self.c_axis = 2 # channel axis
+
+        elif order == "WHC":
+
+            self.h_axis = 1 # height axis
+            self.w_axis = 0 # width axis
+            self.c_axis = 2 # channel axis
+
+        elif order == "CWH":
+
+            self.h_axis = 2 # height axis
+            self.w_axis = 1 # width axis
+            self.c_axis = 0 # channel axis
+
+        elif order == "CHW":
+
+            self.h_axis = 1 # height axis
+            self.w_axis = 2 # width axis
+            self.c_axis = 0 # channel axis
+
+        else:
+
+            raise ValueError("Value of 'order' keyword argument must be \
+                                included in ['HWC','WHC','CWH','CHW']")
 
 ################################################################################
 #                               Display
@@ -113,7 +155,7 @@ class SequenceViewer(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, pause_for=30):
+    def __init__(self, pause_for=30, order="HWC"):
         """Instantiates the SequenceViewer
 
         Arg:
@@ -121,7 +163,7 @@ class SequenceViewer(ImageBlock):
                 between images. defaults to 30ms
         """
         self.pause_for = int(pause_for)
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     ############################################################################
@@ -177,7 +219,7 @@ class QuickView(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, pause_for=500, close_fig=False):
+    def __init__(self, pause_for=500, close_fig=False, order="HWC"):
         """Instantiates the SequenceViewer
 
         Arg:
@@ -190,7 +232,7 @@ class QuickView(ImageBlock):
         self.close_fig = close_fig
         self.fig = None
         self.timer = ip.Timer()
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def preprocess(self):
@@ -209,6 +251,8 @@ class QuickView(ImageBlock):
         Returns:
             None
         """
+        print("Image:",image.shape)
+        print(image)
         # show the image
         plt.imshow( cv2.cvtColor(image, cv2.COLOR_RGB2BGR) )
         # pause after converting to seconds
@@ -220,7 +264,83 @@ class QuickView(ImageBlock):
             plt.close(self.fig)
 
 
+class CompareView(ImageBlock):
+    """Image Viewer that uses matplotlib internally to compare 2 images.
+    Nearly always guarenteed to work, but timing will be less accurate
+    especially for short timeframes
 
+    This viewer will work with online sphinx-generated examples
+
+    Attributes:
+        pause_for(int): the amount of time in milliseconds to pause
+            between images
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+        2) image2
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+    Batch Size:
+        "each"
+    """
+    def __init__(self, pause_for=500, close_fig=False, order="HWC"):
+        """Instantiates the SequenceViewer
+
+        Arg:
+            pause_for(int): the amount of time in milliseconds to pause
+                between images. defaults to 500ms
+            close_fig(bool): whether or not to close the matplotlib figure after
+                processing is done. defaults to False
+        """
+        self.pause_for = pause_for
+        self.close_fig = close_fig
+        self.fig = None
+        self.axes = None
+        self.timer = ip.Timer()
+        super().__init__(order=order)
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
+        self.enforce('image2', np.ndarray, [(None,None),(None,None,None)])
+
+    def preprocess(self):
+        self.fig, self.axes = plt.subplots(1, 2)
+
+        # make this figure interactive
+        plt.ion()
+        # display it
+        plt.show()
+
+    def process(self, image, image2):
+        """Displays the image in a matplotlib figure
+
+        Args:
+            image (np.ndarray): image
+            image2 (np.ndarray): second image
+
+        Returns:
+            None
+        """
+
+        print("Image:",image.shape)
+        print(image)
+        print("Image2:",image2.shape)
+        print(image2)
+
+        # show the image
+        self.axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+        self.axes[0].set_title('Original')
+        self.axes[1].imshow(cv2.cvtColor(image2, cv2.COLOR_RGB2BGR))
+        self.axes[1].set_title('Filtered')
+
+        # plt.imshow( cv2.cvtColor(image, cv2.COLOR_RGB2BGR) )
+        # pause after converting to seconds
+        plt.pause(self.pause_for / 1000.0)
+
+    def postprocess(self):
+        """closes the matplotlib figure"""
+        if self.close_fig:
+            plt.close(self.fig)
 
 
 
@@ -238,9 +358,9 @@ class ChannelSplit(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self):
+    def __init__(self, order="HWC"):
         """Instantiates the object"""
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None,None)])
 
     def process(self, image):
@@ -249,7 +369,7 @@ class ChannelSplit(ImageBlock):
         Args:
             image(np.ndarray): image to channel split
         """
-        channels = tuple(image[:,:,ch] for ch in range(image.shape[self.b_axis]))
+        channels = tuple(image[:,:,ch] for ch in range(image.shape[self.c_axis]))
         return channels
 
 
@@ -266,8 +386,8 @@ class BaseChannelMerger(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, order="HWC"):
+        super().__init__(order=order)
 
         for arg in self.args:
             self.enforce(arg, np.ndarray, [(None,None)])
@@ -278,7 +398,7 @@ class BaseChannelMerger(ImageBlock):
         Args:
             *images(variable length tuple of images):
         """
-        return np.stack(images, axis=self.b_axis)
+        return np.stack(images, axis=self.c_axis)
 
 
 class MergerFactory(object):
@@ -378,25 +498,38 @@ class CastTo(ip.Block):
 
 ################################################################################
 class Squeeze(ip.Block):
-    """Removes single dimension axes from the
+    """Removes single dimension axes from the array
     """
     def __init__(self):
-        super().__init__()
+        super().__init__(batch_type="each")
         self.enforce('arr', np.ndarray, None)
 
     def process(self, arr):
         return np.squeeze(arr)
 
+class Unsqueeze(ip.Block):
+    """Adds single dimension to array at specified  position
+    """
+    def __init__(self, axis):
+        super().__init__(batch_type="each")
+        self.enforce('arr', np.ndarray, None)
+
+        self.axis = axis
+
+    def process(self, arr):
+
+        return np.expand_dims(arr, axis=self.axis)
+
 
 ################################################################################
 class Dimensions(ImageBlock):
-    """Retrieves the dimensions of the image, including number of bands. If
-    `bands_none_if_2d` is True, then grayscale images will return
-    n_bands = None. Otherwise n_bands will be equal to 1 for grayscale imagery.
+    """Retrieves the dimensions of the image, including number of channels. If
+    `channels_none_if_2d` is True, then grayscale images will return
+    n_channels = None. Otherwise n_channels will be equal to 1 for grayscale imagery.
 
     Attributes:
-        bands_none_if_2d(bool): whether or not to return n_bands = None for
-            grayscale imagery instead of n_bands = 1.
+        channels_none_if_2d(bool): whether or not to return n_channels = None for
+            grayscale imagery instead of n_channels = 1.
 
     Default Enforcement:
         1) image
@@ -406,25 +539,25 @@ class Dimensions(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, bands_none_if_2d=False):
+    def __init__(self, channels_none_if_2d=False, order="HWC"):
         """Instantiates the object
 
         Args:
-            bands_none_if_2d(bool): whether or not to return n_bands = None for
-                grayscale imagery instead of n_bands = 1.
+            channels_none_if_2d(bool): whether or not to return n_channels = None for
+                grayscale imagery instead of n_channels = 1.
         """
-        self.bands_none_if_2d = bands_none_if_2d
-        super().__init__()
+        self.channels_none_if_2d = channels_none_if_2d
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
-        """Retrieves the height, width, and number of bands in the image.
+        """Retrieves the height, width, and number of channels in the image.
 
-        if `bands_none_if_2d` is True, then grayscale images will return
-        n_bands = None, otherwise n_bands = 1 for grayscale images.
+        if `channels_none_if_2d` is True, then grayscale images will return
+        n_channels = None, otherwise n_channels = 1 for grayscale images.
 
         Notes:
-            assume image bands are the last axis
+            assume image channels are the last axis
 
         Args:
             image(np.ndarray): the input image
@@ -434,23 +567,23 @@ class Dimensions(ImageBlock):
 
                 height(int): number of rows in image
                 width(int): number of columns in image
-                n_bands(int): number of bands in image
+                n_channels(int): number of channels in image
         """
         # GRAYSCALE CASE
         if image.ndim == 2:
-            if self.bands_none_if_2d:
-                n_bands = None
+            if self.channels_none_if_2d:
+                n_channels = None
             else:
-                n_bands = 1
+                n_channels = 1
         # MULTIBAND CASE
         else:
-            n_bands = image.shape[self.b_axis]
+            n_channels = image.shape[self.c_axis]
 
         # fetch the height and width axes using the axes prop
         height = image.shape[self.h_axis]
         width = image.shape[self.w_axis]
 
-        return height, width, n_bands
+        return [height, width, n_channels]
 
 
 ################################################################################
@@ -465,9 +598,9 @@ class FrameSize(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self):
+    def __init__(self, order="HWC"):
         """Instantiates the object"""
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
@@ -498,9 +631,9 @@ class Centroid(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self):
+    def __init__(self, order="HWC"):
         """Instantiates the object"""
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
@@ -538,7 +671,7 @@ class NumberImage(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, start_at=1):
+    def __init__(self, start_at=1, order="HWC"):
         """Instantiates the object
 
         Args:
@@ -550,7 +683,7 @@ class NumberImage(ImageBlock):
                             'fontScale' : 1.5,
                             'thickness' : 1,
                             }
-        super().__init__()
+        super().__init__(order=order)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
 
@@ -728,10 +861,10 @@ class ImageFFT(ImageBlock):
     """
     # NOTE:
     #     Make another block with a batch_type = "all"
-    def __init__(self):
+    def __init__(self, order="HWC"):
         """instantiates the fft block"""
         # call super
-        super().__init__()
+        super().__init__(order=order)
 
         # update block tags
         self.tags.add("filtering")
@@ -743,7 +876,40 @@ class ImageFFT(ImageBlock):
         Args:
             images(np.ndarray): N channel image
         """
-        return np.fft.ftt2(image, axes=(self.h_axis,self.w_axis))
+        return np.fft.fftshift(np.fft.fft2(image, axes=(self.h_axis,self.w_axis)))
+
+
+################################################################################
+class ImageIFFT(ImageBlock):
+    """Performs an IFFT on each Image channel independently
+
+    Default Enforcement:
+        1) image
+            type: np.ndarray
+            shapes: [(None,None), (None,None,None)]
+
+    Batch Size:
+        "each"
+    """
+    # NOTE:
+    #     Make another block with a batch_type = "all"
+    def __init__(self, order="HWC"):
+        """instantiates the ifft block"""
+        # call super
+        super().__init__(order=order)
+
+        # update block tags
+        self.tags.add("filtering")
+
+    ############################################################################
+    def process(self, image):
+        """applies the ifft to each channel'
+
+        Args:
+            images(np.ndarray): N channel image
+        """
+        return np.abs(np.fft.ifft2(np.fft.fftshift(image), axes=(self.h_axis,self.w_axis)))
+
 #
 #
 
