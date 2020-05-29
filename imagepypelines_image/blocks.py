@@ -322,11 +322,6 @@ class CompareView(ImageBlock):
             None
         """
 
-        print("Image:",image.shape)
-        print(image)
-        print("Image2:",image2.shape)
-        print(image2)
-
         # show the image
         self.axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         self.axes[0].set_title('Original')
