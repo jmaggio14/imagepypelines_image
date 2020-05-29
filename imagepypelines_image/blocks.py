@@ -137,6 +137,8 @@ class ImageBlock(ip.Block):
             raise ValueError("Value of 'order' keyword argument must be \
                                 included in ['HWC','WHC','CWH','CHW']")
 
+        self.rc_axes = (self.h_axis, self.w_axis)
+
 ################################################################################
 #                               Display
 ################################################################################
@@ -251,8 +253,6 @@ class QuickView(ImageBlock):
         Returns:
             None
         """
-        print("Image:",image.shape)
-        print(image)
         # show the image
         plt.imshow( cv2.cvtColor(image, cv2.COLOR_RGB2BGR) )
         # pause after converting to seconds
@@ -517,7 +517,6 @@ class Unsqueeze(ip.Block):
         self.axis = axis
 
     def process(self, arr):
-
         return np.expand_dims(arr, axis=self.axis)
 
 
@@ -876,7 +875,8 @@ class ImageFFT(ImageBlock):
         Args:
             images(np.ndarray): N channel image
         """
-        return np.fft.fftshift(np.fft.fft2(image, axes=(self.h_axis,self.w_axis)))
+        image = np.fft.fft2(image, axes=self.rc_axes)
+        return np.fft.fftshift(image, axes=self.rc_axes)
 
 
 ################################################################################
@@ -908,7 +908,25 @@ class ImageIFFT(ImageBlock):
         Args:
             images(np.ndarray): N channel image
         """
-        return np.abs(np.fft.ifft2(np.fft.fftshift(image), axes=(self.h_axis,self.w_axis)))
+        image = np.fft.fftshift(image, axes=self.rc_axes)
+        return np.fft.ifft2(image, axes=self.rc_axes)
+
+
+
+################################################################################
+#                               Input/Output
+################################################################################
+#
+# class Decoder(ImageBlock):
+#     def __init__(self
+# class Encoder(ImageBlock):
+#     def __init__(self
+# class Writer(ImageBlock):
+#     def __init__(self
+# class Reader(ImageBlock):
+#     def __init__(self
+# class VideoWriter(ImageBlock):
+#     def __init__(self
 
 #
 #
