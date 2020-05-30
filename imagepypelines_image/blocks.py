@@ -106,37 +106,14 @@ class ImageBlock(ip.Block):
         # personally, I think we should alias these with getters and provide a
         # setter utility for axes_order/order a.k.a self.order = "HWC" ->(0,1,2)
         # As a rule, channel axis never ends up in the middle
-
-        if order == "HWC":
-
-            # Setup defaults = "HWC" -> (0,1,2)
-            self.h_axis = 0 # height axis
-            self.w_axis = 1 # width axis
-            self.c_axis = 2 # channel axis
-
-        elif order == "WHC":
-
-            self.h_axis = 1 # height axis
-            self.w_axis = 0 # width axis
-            self.c_axis = 2 # channel axis
-
-        elif order == "CWH":
-
-            self.h_axis = 2 # height axis
-            self.w_axis = 1 # width axis
-            self.c_axis = 0 # channel axis
-
-        elif order == "CHW":
-
-            self.h_axis = 1 # height axis
-            self.w_axis = 2 # width axis
-            self.c_axis = 0 # channel axis
-
-        else:
-
+        order = order.upper()
+        if order not in ('HWC','WHC','CWH','CHW'):
             raise ValueError("Value of 'order' keyword argument must be \
-                                included in ['HWC','WHC','CWH','CHW']")
+                            one of ['HWC','WHC','CWH','CHW']")
 
+        self.h_axis = order.find('H') # height axis
+        self.w_axis = order.find('W') # width axis
+        self.c_axis = order.find('C') # channel axis
         self.rc_axes = (self.h_axis, self.w_axis)
 
 ################################################################################
