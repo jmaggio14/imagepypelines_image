@@ -7,11 +7,14 @@
 from .util import dtype_type_check, interpolation_type_check, channel_type_check
 from .imports import import_opencv
 
+
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+from functools import wraps
 cv2 = import_opencv()
 import imagepypelines as ip
+
 
 """
 
@@ -179,8 +182,8 @@ class SequenceViewer(ImageBlock):
         cv2.destroyWindow(self.id)
 
 ################################################################################
-
-class QuickView(ImageBlock):
+# MATPLOTLIB VIEWERS
+class BaseMatplotlibViewer(ImageBlock):
     """Image Viewer that uses matplotlib internally. Nearly always guarenteed
     to work, but timing will be less accurate especially for short timeframes
 
@@ -189,6 +192,9 @@ class QuickView(ImageBlock):
     Attributes:
         pause_for(int): the amount of time in milliseconds to pause
             between images
+        fig(matplotlib.pyplot.Figure): Figure object for this viewer
+        close_fig(bool): whether or not to close the matplotlib figure after
+            processing is done. defaults to False
 
     Default Enforcement:
         1) image
@@ -199,7 +205,7 @@ class QuickView(ImageBlock):
         "each"
     """
     def __init__(self, pause_for=500, close_fig=False, order="HWC"):
-        """Instantiates the SequenceViewer
+        """Instantiates the Matplotlib Viewer
 
         Arg:
             pause_for(int): the amount of time in milliseconds to pause
@@ -212,7 +218,6 @@ class QuickView(ImageBlock):
         self.fig = None
         self.timer = ip.Timer()
         super().__init__(order=order)
-        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def preprocess(self):
         self.fig = plt.figure()
@@ -220,6 +225,18 @@ class QuickView(ImageBlock):
         plt.ion()
         # display it
         plt.show()
+
+    def postprocess(self):
+        """closes the matplotlib figure"""
+        if self.close_fig:
+            plt.close(self.fig)
+
+################################################################################
+class QuickView(BaseMatplotlibViewer):
+    @wraps(BaseMatplotlibViewer.__init__)
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args, **kwargs)
+        self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
 
     def process(self, image):
         """Displays the image in a matplotlib figure
@@ -235,13 +252,8 @@ class QuickView(ImageBlock):
         # pause after converting to seconds
         plt.pause(self.pause_for / 1000.0)
 
-    def postprocess(self):
-        """closes the matplotlib figure"""
-        if self.close_fig:
-            plt.close(self.fig)
-
-
-class CompareView(ImageBlock):
+################################################################################
+class CompareView(BaseMatplotlibViewer):
     """Image Viewer that uses matplotlib internally to compare 2 images.
     Nearly always guarenteed to work, but timing will be less accurate
     especially for short timeframes
@@ -262,21 +274,9 @@ class CompareView(ImageBlock):
     Batch Size:
         "each"
     """
-    def __init__(self, pause_for=500, close_fig=False, order="HWC"):
-        """Instantiates the SequenceViewer
-
-        Arg:
-            pause_for(int): the amount of time in milliseconds to pause
-                between images. defaults to 500ms
-            close_fig(bool): whether or not to close the matplotlib figure after
-                processing is done. defaults to False
-        """
-        self.pause_for = pause_for
-        self.close_fig = close_fig
-        self.fig = None
-        self.axes = None
-        self.timer = ip.Timer()
-        super().__init__(order=order)
+    @wraps(BaseMatplotlibViewer.__init__)
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args, **kwargs)
         self.enforce('image', np.ndarray, [(None,None),(None,None,None)])
         self.enforce('image2', np.ndarray, [(None,None),(None,None,None)])
 
@@ -298,21 +298,13 @@ class CompareView(ImageBlock):
         Returns:
             None
         """
-
         # show the image
         self.axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
-        self.axes[0].set_title('Original')
+        self.axes[0].set_title('Image1')
         self.axes[1].imshow(cv2.cvtColor(image2, cv2.COLOR_RGB2BGR))
-        self.axes[1].set_title('Filtered')
+        self.axes[1].set_title('Image2')
 
-        # plt.imshow( cv2.cvtColor(image, cv2.COLOR_RGB2BGR) )
-        # pause after converting to seconds
         plt.pause(self.pause_for / 1000.0)
-
-    def postprocess(self):
-        """closes the matplotlib figure"""
-        if self.close_fig:
-            plt.close(self.fig)
 
 
 
