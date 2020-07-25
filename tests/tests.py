@@ -25,10 +25,10 @@ geckos = [ip.image.gecko() for i in range(10)]
 # processed = pipeline.process(geckos)
 
 ip.MASTER_LOGGER.debug("processing our data")
-bad_processed = pipeline.process([np.random.rand(512,512)] )
-
-ip.MASTER_LOGGER.debug("this will now throw an error")
 try:
-    bad_processed = pipeline.process([np.random.rand(512,512)], skip_checks=True )
+    bad_processed = pipeline.process([np.random.rand(512,512)] )
 except ip.BlockError:
     pass
+
+# ip.MASTER_LOGGER.debug("this will now not throw an error")
+# processed = pipeline.process([np.random.rand(512,512)], skip_enforcement=True )
