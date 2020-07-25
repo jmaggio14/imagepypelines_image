@@ -28,4 +28,7 @@ ip.MASTER_LOGGER.debug("processing our data")
 bad_processed = pipeline.process([np.random.rand(512,512)] )
 
 ip.MASTER_LOGGER.debug("this will now throw an error")
-bad_processed = pipeline.process([np.random.rand(512,512)], skip_checks=True )
+try:
+    bad_processed = pipeline.process([np.random.rand(512,512)], skip_checks=True )
+except ip.BlockError:
+    pass
