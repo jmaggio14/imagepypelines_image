@@ -24,3 +24,4 @@ del sys, curr_module, funcs, STANDARD_IMAGES
 
 
 from .blocks import *
+from .Resize import Resize
