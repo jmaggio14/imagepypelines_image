@@ -5,8 +5,8 @@ import numpy as np
 ip.require("image")
 
 
-ip.MASTER_LOGGER.setLevel(10)
-ip.MASTER_LOGGER.debug("defining our tasks")
+ip.get_master_logger().setLevel(10)
+ip.get_master_logger().debug("defining our tasks")
 
 tasks = {
         'geckos':ip.Input(0),
@@ -18,17 +18,17 @@ tasks = {
         ('red','green','blue') : (ip.image.ChannelSplit(), 'display_safe'),
         }
 
-ip.MASTER_LOGGER.debug("make our pipeline")
+ip.get_master_logger().debug("make our pipeline")
 pipeline = ip.Pipeline(tasks, name='Lenna')
 
 geckos = [ip.image.gecko() for i in range(10)]
 # processed = pipeline.process(geckos)
 
-ip.MASTER_LOGGER.debug("processing our data")
+ip.get_master_logger().debug("processing our data")
 try:
     bad_processed = pipeline.process([np.random.rand(512,512)] )
 except ip.BlockError:
     pass
 
-# ip.MASTER_LOGGER.debug("this will now not throw an error")
+# ip.get_master_logger().debug("this will now not throw an error")
 # processed = pipeline.process([np.random.rand(512,512)], skip_enforcement=True )
