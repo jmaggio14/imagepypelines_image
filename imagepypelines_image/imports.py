@@ -6,7 +6,7 @@
 # Copyright (c) 2018 - 2020 Jeff Maggio, Jai Mehra, Ryan Hartzell
 #
 import sys
-from imagepypelines import MASTER_LOGGER
+from imagepypelines import get_master_logger
 
 
 def import_opencv():
@@ -24,8 +24,8 @@ def import_opencv():
     try:
         import cv2
     except ImportError:
-        MASTER_LOGGER.error("imagepypelines_image requires opencv to be installed separately")
-        MASTER_LOGGER.error("try 'pip install opencv-python' or install from source (see https://docs.opencv.org/master/da/df6/tutorial_py_table_of_contents_setup.html)")
+        get_master_logger().error("imagepypelines_image requires opencv to be installed separately")
+        get_master_logger().error("try 'pip install imagepypelines_image[cv]' or install OpenCV from source (see https://docs.opencv.org/master/da/df6/tutorial_py_table_of_contents_setup.html)")
         sys.exit(1)
 
     return cv2

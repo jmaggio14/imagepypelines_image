@@ -155,7 +155,7 @@
 #
 #     Args:
 #         img (np.ndarray): image to normalize, can be any dtype.
-#         dtype (np dtype): integer datatype to normalize to.
+#         dtype (np dtype): integer datum_type to normalize to.
 #
 #     Returns:
 #         np.ndarray: normalized image, dtype=dtype
