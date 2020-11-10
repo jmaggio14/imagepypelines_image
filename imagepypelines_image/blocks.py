@@ -789,7 +789,7 @@ class NormDtype(NormAB):
     """
     def __init__(self, cast_type=np.float64):
         dtype_info = np.iinfo(cast_type)
-        super().__init__(type_info.min, dtype_info.max, cast_type)
+        super().__init__(dtype_info.min, dtype_info.max, cast_type)
 
 
 ################################################################################

@@ -1,7 +1,7 @@
-from .util import dtype_type_check,
-                    interpolation_type_check,
-                    channel_type_check,
-                    get_cv2_interp_type,
+from .util import dtype_type_check,\
+                    interpolation_type_check,\
+                    channel_type_check,\
+                    get_cv2_interp_type
 from .imports import import_opencv
 from .blocks import ImageBlock
 
